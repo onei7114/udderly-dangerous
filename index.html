@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Udderly Dangerous</title>
+  <style>
+    :root {
+      --ink: #2f2418;
+      --cream: #fff5df;
+      --orange: #e9683d;
+      --green: #2e7d4d;
+      --gold: #f5ba4a;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      overflow: auto;
+      color: var(--ink);
+      background: #d9e8d2;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    .game-shell {
+      width: min(94vw, 680px);
+      padding: 18px 18px 22px;
+      border: 3px solid var(--ink);
+      border-radius: 24px;
+      background: var(--cream);
+      box-shadow: 10px 12px 0 #9cbc8e;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .eyebrow {
+      margin: 0 0 2px;
+      color: var(--orange);
+      font-size: 0.75rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.7rem, 5vw, 2.8rem);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .stats {
+      display: flex;
+      gap: 8px;
+      text-align: center;
+    }
+
+    .stat {
+      min-width: 62px;
+      padding: 7px 10px;
+      border: 2px solid var(--ink);
+      border-radius: 12px;
+      background: #f9d56c;
+    }
+
+    .stat strong, .stat span { display: block; }
+    .stat strong { font-size: 1.15rem; }
+    .stat span { font-size: 0.64rem; font-weight: 900; text-transform: uppercase; }
+
+    .canvas-wrap {
+      position: relative;
+      overflow: hidden;
+      border: 3px solid var(--ink);
+      border-radius: 16px;
+      background: #87c56b;
+    }
+
+    canvas { display: block; width: 100%; height: auto; }
+
+    .message {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(255, 245, 223, 0.93);
+      text-align: center;
+    }
+
+    .message-card { max-width: 370px; }
+    .message h2 { margin: 0 0 7px; font-size: 2rem; }
+    .message p { margin: 0 0 16px; line-height: 1.4; }
+
+    button {
+      cursor: pointer;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      padding: 10px 20px;
+      color: var(--cream);
+      background: var(--orange);
+      box-shadow: 0 4px 0 var(--ink);
+      font: inherit;
+      font-weight: 900;
+    }
+    button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+
+    .instructions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 13px;
+      font-size: 0.82rem;
+      font-weight: 800;
+    }
+
+    .keys { display: flex; gap: 4px; }
+    kbd {
+      display: inline-grid;
+      min-width: 28px;
+      height: 27px;
+      place-items: center;
+      border: 2px solid var(--ink);
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: 0 2px 0 var(--ink);
+      font-size: 1rem;
+    }
+
+    @media (max-width: 560px) {
+      .game-shell { padding: 13px 12px 16px; }
+      header { align-items: start; flex-direction: column; }
+      .instructions { align-items: start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="game-shell">
+    <header>
+      <div>
+        <p class="eyebrow">A pasture-to-pasture adventure</p>
+        <h1>Udderly Dangerous</h1>
+      </div>
+      <div class="stats" aria-label="Game statistics">
+        <div class="stat"><strong id="score">0</strong><span>Score</span></div>
+        <div class="stat"><strong id="lives">3</strong><span>Lives</span></div>
+        <div class="stat"><strong id="level">1</strong><span>Level</span></div>
+      </div>
+    </header>
+
+    <div class="canvas-wrap">
+      <canvas id="game" width="720" height="960" aria-label="Udderly Dangerous game board"></canvas>
+      <div class="message" id="message">
+        <div class="message-card">
+          <h2>Get that cow home!</h2>
+          <p>Guide Bessie from the <strong>bottom-center start marker</strong> across the farmer patrols, ride the river logs, and reach the golden barn.</p>
+          <button id="start">Start milking it</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span>Move with your arrow keys. Reach the barn to score!</span>
+      <span class="keys" aria-label="Arrow keys"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const message = document.getElementById("message");
+    const messageTitle = message.querySelector("h2");
+    const messageText = message.querySelector("p");
+    const startButton = document.getElementById("start");
+    const scoreEl = document.getElementById("score");
+    const livesEl = document.getElementById("lives");
+    const levelEl = document.getElementById("level");
+
+    const COLS = 9;
+    const ROWS = 12;
+    const TILE = canvas.width / COLS;
+    const START = { x: 4, y: 11 };
+    const colors = { ink: "#2f2418", grass: "#8bc96a", grassDark: "#6cac58", water: "#4da7c3", waterDark: "#2e7898", road: "#6b5b4b", roadLine: "#e5bd63", bank: "#d7b85b" };
+    let cow, farmers, logs, score = 0, lives = 3, level = 1, playing = false, lastTime = 0, animation;
+
+    function makeEntities() {
+      farmers = [
+        { x: -1.2, y: 8, w: 1.3, speed: 1.25, color: "#e9683d" },
+        { x: 5.2, y: 9, w: 1.15, speed: -1.8, color: "#5b70ad" },
+        { x: 1.2, y: 10, w: 1.4, speed: 1.55, color: "#d8953e" },
+        { x: 7.5, y: 8, w: 1.15, speed: 1.2, color: "#8657a8" }
+      ];
+      logs = [
+        { x: -2, y: 4, w: 2.7, speed: 0.85 },
+        { x: 2.4, y: 5, w: 2.1, speed: -1.15 },
+        { x: 6, y: 6, w: 3, speed: 0.7 },
+        { x: -1.8, y: 7, w: 2.2, speed: -0.95 }
+      ];
+      cow = { x: START.x, y: START.y, riding: false };
+    }
+
+    function resetGame() {
+      score = 0; lives = 3; level = 1; makeEntities(); updateStats();
+      message.style.display = "none"; playing = true; lastTime = performance.now();
+      cancelAnimationFrame(animation); animation = requestAnimationFrame(loop);
+    }
+
+    function updateStats() {
+      scoreEl.textContent = score;
+      livesEl.textContent = lives;
+      levelEl.textContent = level;
+    }
+
+    function drawText(text, x, y, size, color = colors.ink, align = "center") {
+      ctx.font = `900 ${size}px "Trebuchet MS", sans-serif`;
+      ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle"; ctx.fillText(text, x, y);
+    }
+
+    function drawBoard() {
+      ctx.fillStyle = colors.grass; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < ROWS; y++) {
+        if (y === 0) {
+          ctx.fillStyle = "#f4ca59"; ctx.fillRect(0, 0, canvas.width, TILE);
+          drawText("★  GOLDEN BARN  ★", canvas.width / 2, TILE / 2, 20, "#5e4322");
+        } else if (y >= 4 && y <= 7) {
+          ctx.fillStyle = colors.water; ctx.fillRect(0, y * TILE, canvas.width, TILE);
+          for (let x = 0; x < COLS; x += 2) {
+            ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(x * TILE + 24, y * TILE + 20, 12, 0.1, 2.8); ctx.stroke();
+          }
+        } else if (y >= 8 && y <= 10) {
+          ctx.fillStyle = colors.road; ctx.fillRect(0, y * TILE, canvas.width, TILE);
+          ctx.strokeStyle = colors.roadLine; ctx.lineWidth = 3; ctx.setLineDash([22, 18]);
+          ctx.beginPath(); ctx.moveTo(0, y * TILE + TILE / 2); ctx.lineTo(canvas.width, y * TILE + TILE / 2); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        if (y === 3) { ctx.fillStyle = colors.bank; ctx.fillRect(0, y * TILE, canvas.width, TILE); }
+      }
+      ctx.fillStyle = colors.grassDark; ctx.fillRect(0, 2 * TILE, canvas.width, TILE);
+      drawText("Cross the river • dodge the farmers", canvas.width / 2, 2.5 * TILE, 15, "#f5f0d7");
+      ctx.fillStyle = "#fff1bd"; ctx.fillRect(0, 11 * TILE, canvas.width, TILE);
+      ctx.fillStyle = "#f5ba4a"; ctx.beginPath();
+      ctx.roundRect(2.95 * TILE, 11 * TILE + 7, 3.1 * TILE, TILE - 14, 14); ctx.fill();
+      ctx.strokeStyle = "#2f2418"; ctx.lineWidth = 3; ctx.stroke();
+      drawText("BESSIE STARTS HERE", 4.5 * TILE, 11.5 * TILE, 14, "#2f2418");
+    }
+
+    function drawLog(log) {
+      const x = log.x * TILE, y = log.y * TILE + 11, w = log.w * TILE, h = TILE - 22;
+      ctx.fillStyle = "#84522f"; ctx.beginPath(); ctx.roundRect(x, y, w, h, 13); ctx.fill();
+      ctx.fillStyle = "#b97943"; ctx.beginPath(); ctx.roundRect(x + 7, y + 5, w - 14, h - 10, 9); ctx.fill();
+      ctx.fillStyle = "#e2a261"; ctx.beginPath(); ctx.ellipse(x + w - 11, y + h / 2, 7, h / 2 - 4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+
+    function drawFarmer(farmer) {
+      const x = farmer.x * TILE, y = farmer.y * TILE + 10, w = farmer.w * TILE, h = TILE - 20;
+      ctx.fillStyle = farmer.color; ctx.beginPath(); ctx.roundRect(x, y + 13, w, h - 13, 9); ctx.fill();
+      ctx.fillStyle = "#f2bf8e"; ctx.beginPath(); ctx.arc(x + w / 2, y + 12, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#7b4b2e"; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 4, 15, 6, 0, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x + w / 2 - 4, y + 12, 2, 0, Math.PI * 2); ctx.arc(x + w / 2 + 4, y + 12, 2, 0, Math.PI * 2); ctx.fill();
+      drawText("!", x + w / 2, y + h - 5, 14, "#fff7d6");
+    }
+
+    function drawCow() {
+      const x = cow.x * TILE + TILE / 2, y = cow.y * TILE + TILE / 2;
+      ctx.save(); ctx.translate(x, y);
+      ctx.fillStyle = "rgba(245, 186, 74, .55)"; ctx.beginPath(); ctx.arc(0, 2, 31, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#2f2418"; ctx.lineWidth = 4;
+      ctx.fillStyle = "#fffaf0"; ctx.beginPath(); ctx.ellipse(0, 3, 27, 22, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#47372b"; ctx.beginPath(); ctx.arc(-11, -5, 8, 0, Math.PI * 2); ctx.arc(11, 9, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#f3b4a1"; ctx.beginPath(); ctx.ellipse(0, 14, 14, 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = colors.ink; ctx.beginPath(); ctx.arc(-5, 13, 2, 0, Math.PI * 2); ctx.arc(5, 13, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#f8d46a"; ctx.beginPath(); ctx.moveTo(-18, -15); ctx.lineTo(-28, -29); ctx.lineTo(-11, -22); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(18, -15); ctx.lineTo(28, -29); ctx.lineTo(11, -22); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = colors.ink; ctx.beginPath(); ctx.arc(-9, -8, 3.5, 0, Math.PI * 2); ctx.arc(9, -8, 3.5, 0, Math.PI * 2); ctx.fill();
+      drawText("BESSIE", 0, -37, 12, "#2f2418");
+      ctx.restore();
+    }
+
+    function overlap(a, b) { return a.x < b.x + b.w && a.x + 0.62 > b.x && a.y === b.y; }
+
+    function loseLife() {
+      lives--; updateStats();
+      if (lives <= 0) {
+        playing = false; messageTitle.textContent = "The farm wins!";
+        messageText.textContent = `Bessie made it ${score} points. Ready for one more crossing?`;
+        startButton.textContent = "Try again"; message.style.display = "grid";
+      } else {
+        cow.x = START.x; cow.y = START.y; cow.riding = false;
+      }
+    }
+
+    function move(dx, dy) {
+      if (!playing) return;
+      const next = { x: Math.max(0, Math.min(COLS - 1, cow.x + dx)), y: Math.max(0, Math.min(ROWS - 1, cow.y + dy)) };
+      if (next.x !== cow.x || next.y !== cow.y) { cow.x = next.x; cow.y = next.y; score += dy < 0 ? 10 : 0; updateStats(); }
+      if (cow.y === 0) {
+        score += 100; level++; updateStats(); cow.x = START.x; cow.y = START.y;
+        farmers.forEach(f => f.speed *= 1.06); logs.forEach(l => l.speed *= 1.04);
+      }
+    }
+
+    function update(dt) {
+      farmers.forEach(f => { f.x += f.speed * dt; if (f.speed > 0 && f.x > COLS + 1) f.x = -f.w - 1; if (f.speed < 0 && f.x + f.w < -1) f.x = COLS + 1; });
+      logs.forEach(l => { l.x += l.speed * dt; if (l.speed > 0 && l.x > COLS + 1) l.x = -l.w - 1; if (l.speed < 0 && l.x + l.w < -1) l.x = COLS + 1; });
+      const river = cow.y >= 4 && cow.y <= 7;
+      if (river) {
+        const log = logs.find(l => overlap({ x: cow.x + 0.19, y: cow.y }, l));
+        if (log) { cow.x += log.speed * dt; cow.riding = true; } else { cow.riding = false; loseLife(); }
+      } else cow.riding = false;
+      if (cow.x < -0.4 || cow.x > COLS - 0.2) loseLife();
+      if (farmers.some(f => overlap({ x: cow.x + 0.19, y: cow.y }, f))) loseLife();
+    }
+
+    function loop(now) {
+      if (!playing) return;
+      const dt = Math.min((now - lastTime) / 1000, 0.05); lastTime = now;
+      update(dt); drawBoard(); logs.forEach(drawLog); farmers.forEach(drawFarmer); drawCow();
+      animation = requestAnimationFrame(loop);
+    }
+
+    document.addEventListener("keydown", event => {
+      const moves = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+      if (moves[event.key]) { event.preventDefault(); move(...moves[event.key]); }
+      if (event.key === " " && !playing) resetGame();
+    });
+    startButton.addEventListener("click", resetGame);
+    makeEntities(); drawBoard(); drawCow();
+  </script>
+</body>
+</html>
